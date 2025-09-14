@@ -33,9 +33,13 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials', 
+                    usernameVariable: 'DOCKER_USER', 
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
                     sh """
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker push ${env.IMAGE_TAG}
                         docker push ${env.LATEST_TAG}
                     """
@@ -45,10 +49,21 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                // Combine Docker and SSH credentials in one block
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials', 
+                        usernameVariable: 'DOCKER_USER', 
+                        passwordVariable: 'DOCKER_PASS'
+                    ),
+                    sshUserPrivateKey(
+                        credentialsId: 'ec2-ssh-key', 
+                        keyFileVariable: 'SSH_KEY'
+                    )
+                ]) {
                     sh """
                         ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${EC2_HOST} '
-                            docker login -u ${DOCKER_REGISTRY} -p ${DOCKER_PASS} &&
+                            docker login -u $DOCKER_USER -p $DOCKER_PASS &&
                             docker pull ${env.LATEST_TAG} &&
                             docker stop myapp || true &&
                             docker rm myapp || true &&
