@@ -20,7 +20,7 @@ pipeline {
                     def imageTag = "${DOCKER_REGISTRY}/${DOCKER_REPO}:${env.BUILD_NUMBER}"
                     def latestTag = "${DOCKER_REGISTRY}/${DOCKER_REPO}:latest"
 
-                    sh """
+                    bat """
                         docker build -t ${imageTag} .
                         docker tag ${imageTag} ${latestTag}
                     """
@@ -38,8 +38,8 @@ pipeline {
                     usernameVariable: 'DOCKER_USER', 
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh """
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    bat """
+                        echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
                         docker push ${env.IMAGE_TAG}
                         docker push ${env.LATEST_TAG}
                     """
@@ -49,7 +49,6 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
-                // Combine Docker and SSH credentials in one block
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-credentials', 
@@ -61,14 +60,14 @@ pipeline {
                         keyFileVariable: 'SSH_KEY'
                     )
                 ]) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${EC2_HOST} '
-                            docker login -u $DOCKER_USER -p $DOCKER_PASS &&
-                            docker pull ${env.LATEST_TAG} &&
-                            docker stop myapp || true &&
-                            docker rm myapp || true &&
-                            docker run -d --name myapp -p 80:3000 ${env.LATEST_TAG}
-                        '
+                    // Using Git Bash / OpenSSH to run SSH from Windows
+                    bat """
+                        ssh -o StrictHostKeyChecking=no -i %SSH_KEY% ${EC2_HOST} ^
+                        "docker login -u %DOCKER_USER% -p %DOCKER_PASS% && ^
+                        docker pull ${env.LATEST_TAG} && ^
+                        docker stop myapp || true && ^
+                        docker rm myapp || true && ^
+                        docker run -d --name myapp -p 80:3000 ${env.LATEST_TAG}"
                     """
                 }
             }
